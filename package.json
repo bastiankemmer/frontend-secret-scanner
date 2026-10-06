@@ -1,6 +1,6 @@
 {
   "name": "frontend-secret-scanner",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "license": "MIT",
   "description": "Browser-side scanner that finds secrets in text before that text is sent to a server or a model.",
@@ -12,9 +12,18 @@
   "bugs": {
     "url": "https://github.com/bastiankemmer/frontend-secret-scanner/issues"
   },
-  "keywords": ["secrets", "api-key", "scanner", "browser", "dlp"],
+  "keywords": [
+    "secrets",
+    "api-key",
+    "scanner",
+    "browser",
+    "dlp"
+  ],
   "sideEffects": false,
-  "files": ["dist", "CHANGELOG.md"],
+  "files": [
+    "dist",
+    "CHANGELOG.md"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
