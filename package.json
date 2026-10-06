@@ -1,0 +1,45 @@
+{
+  "name": "frontend-secret-scanner",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "Browser-side scanner that finds secrets in text before that text is sent to a server or a model.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bastiankemmer/frontend-secret-scanner.git"
+  },
+  "homepage": "https://github.com/bastiankemmer/frontend-secret-scanner#readme",
+  "bugs": {
+    "url": "https://github.com/bastiankemmer/frontend-secret-scanner/issues"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "keywords": ["secrets", "api-key", "scanner", "browser", "dlp"],
+  "sideEffects": false,
+  "files": ["dist"],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "demo": "vite demo",
+    "prepublishOnly": "npm test && npm run typecheck && npm run build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^7.3.7",
+    "vitest": "^3.2.4"
+  }
+}

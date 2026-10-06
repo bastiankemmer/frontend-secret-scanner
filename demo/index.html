@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Secret detector</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font: 16px/1.4 system-ui, sans-serif;
+        background: #f6f5f2;
+        color: #1c1917;
+      }
+      main {
+        max-width: 40rem;
+        margin: 0 auto;
+        padding: 2rem 1.25rem 3rem;
+      }
+      h1 {
+        font-size: 1.25rem;
+        margin: 0 0 0.5rem;
+      }
+      fieldset {
+        border: 1px solid #d6d3d1;
+        border-radius: 0.5rem;
+        margin: 0 0 1rem;
+        padding: 0.75rem 1rem 1rem;
+      }
+      label {
+        display: block;
+        margin: 0.45rem 0;
+      }
+      textarea,
+      input[type="text"],
+      input[type="number"],
+      select,
+      pre {
+        width: 100%;
+        box-sizing: border-box;
+        font: inherit;
+      }
+      textarea {
+        min-height: 6rem;
+        padding: 0.75rem;
+        border: 1px solid #d6d3d1;
+        border-radius: 0.5rem;
+      }
+      input[type="text"],
+      input[type="number"],
+      select {
+        margin-top: 0.2rem;
+        padding: 0.35rem 0.5rem;
+      }
+      button {
+        margin: 0.75rem 0.5rem 0 0;
+        padding: 0.45rem 0.8rem;
+        font: inherit;
+        font-weight: 600;
+        border: 0;
+        border-radius: 0.5rem;
+        background: #1c1917;
+        color: #fafaf9;
+        cursor: pointer;
+      }
+      button.token {
+        margin: 0.35rem 0.35rem 0 0;
+        padding: 0.2rem 0.5rem;
+        font-weight: 500;
+        color: #1c1917;
+        background: #fff;
+        border: 1px solid #d6d3d1;
+      }
+      button.token[data-secret="true"] {
+        color: #9f1239;
+        border-color: #9f1239;
+      }
+      #tokens {
+        margin-top: 0.5rem;
+      }
+      #verdict {
+        color: #9f1239;
+      }
+      pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+        background: #fff;
+        border-radius: 0.5rem;
+        padding: 0.75rem;
+      }
+      li {
+        margin: 0.25rem 0;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Secret detector</h1>
+      <p>
+        Type a sentence. The check splits it into tokens and asks each token
+        if it is a secret. This page only builds that check. Your app calls
+        <code>onLiveChange</code> or <code>onChange</code> and draws the warning.
+      </p>
+
+      <fieldset>
+        <legend>Config</legend>
+        <label>
+          When
+          <select id="when">
+            <option value="onChange">onChange</option>
+            <option value="onLiveChange">onLiveChange</option>
+          </select>
+        </label>
+        <label>
+          <input id="strict" type="checkbox" checked />
+          Strict: refuse to send when a token is a secret
+        </label>
+        <label>
+          Result
+          <select id="report">
+            <option value="detail">Details</option>
+            <option value="boolean">Boolean only</option>
+          </select>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Checklist</legend>
+        <ul id="rules"></ul>
+      </fieldset>
+
+      <fieldset>
+        <legend>Sentence</legend>
+        <label for="draft">Sentence</label>
+        <textarea id="draft" spellcheck="false" autocomplete="off"></textarea>
+        <div id="tokens"></div>
+        <button id="check" type="button">Check</button>
+        <button id="send" type="button">Send</button>
+        <p id="verdict" role="alert"></p>
+        <p id="sent" hidden></p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Shape from a token</legend>
+        <p>Click a token, correct the guess, then add the shape.</p>
+        <label>
+          Name
+          <input id="shape-label" type="text" autocomplete="off" />
+        </label>
+        <label>
+          Prefix
+          <input id="shape-prefix" type="text" autocomplete="off" />
+        </label>
+        <label>
+          Body
+          <select id="shape-body">
+            <option value="letters-digits">Letters and digits</option>
+            <option value="digits">Digits</option>
+            <option value="hex">Hex</option>
+          </select>
+        </label>
+        <label>
+          Minimum length
+          <input id="shape-min" type="number" min="1" value="8" />
+        </label>
+        <button id="add-shape" type="button">Add shape</button>
+        <p id="shape-error" role="alert"></p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Build</legend>
+        <p id="binding"></p>
+        <pre id="build"></pre>
+        <button id="copy" type="button">Copy config</button>
+        <button id="download" type="button">Download</button>
+      </fieldset>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
