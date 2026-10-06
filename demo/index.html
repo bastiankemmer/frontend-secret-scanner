@@ -142,7 +142,11 @@
 
       <fieldset>
         <legend>Shape from a token</legend>
-        <p>Click a token, correct the guess, then add the shape.</p>
+        <p>
+          Click a token, correct the guess, then add the shape. A key with a
+          stable start needs a prefix. A key without one needs a keyword that
+          appears near it, such as the provider name.
+        </p>
         <label>
           Name
           <input id="shape-label" type="text" autocomplete="off" />
@@ -150,6 +154,10 @@
         <label>
           Prefix
           <input id="shape-prefix" type="text" autocomplete="off" />
+        </label>
+        <label>
+          Keywords (comma separated, for keys with no prefix)
+          <input id="shape-keywords" type="text" autocomplete="off" placeholder="mailgun" />
         </label>
         <label>
           Body

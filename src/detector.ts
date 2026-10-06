@@ -129,7 +129,13 @@ const readRules = (value: unknown): SecretRule[] => {
     } catch {
       throw new Error(`Invalid pattern for ${item.rule}.`);
     }
-    return { rule: item.rule, label: item.label, source: item.source };
+    return {
+      rule: item.rule,
+      label: item.label,
+      source: item.source,
+      ...(item.keywords === undefined ? {} : { keywords: [...item.keywords] }),
+      ...(item.scope === undefined ? {} : { scope: item.scope }),
+    };
   });
 };
 
@@ -142,6 +148,12 @@ const isRule = (value: unknown): value is SecretRule => {
     typeof rule.label === "string" &&
     rule.label.length > 0 &&
     typeof rule.source === "string" &&
-    rule.source.length > 0
+    rule.source.length > 0 &&
+    (rule.scope === undefined || rule.scope === "token" || rule.scope === "text") &&
+    (rule.keywords === undefined ||
+      (Array.isArray(rule.keywords) &&
+        rule.keywords.every(
+          (keyword) => typeof keyword === "string" && keyword.trim().length > 0,
+        )))
   );
 };

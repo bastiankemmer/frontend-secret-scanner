@@ -35,6 +35,7 @@ const verdict = must("#verdict", HTMLParagraphElement);
 const sent = must("#sent", HTMLParagraphElement);
 const shapeLabel = must("#shape-label", HTMLInputElement);
 const shapePrefix = must("#shape-prefix", HTMLInputElement);
+const shapeKeywords = must("#shape-keywords", HTMLInputElement);
 const shapeBody = must("#shape-body", HTMLSelectElement);
 const shapeMin = must("#shape-min", HTMLInputElement);
 const shapeError = must("#shape-error", HTMLParagraphElement);
@@ -122,6 +123,10 @@ const useToken = (token: string) => {
     shapePrefix.value = shape.prefix;
     shapeBody.value = shape.body;
     shapeMin.value = String(shape.minLength);
+    if (shape.prefix.length === 0) {
+      shapeError.textContent =
+        "No stable prefix found. Add a keyword that appears near this key.";
+    }
   } catch (error) {
     shapeError.textContent =
       error instanceof Error ? error.message : "Could not read that token.";
@@ -226,6 +231,7 @@ must("#add-shape", HTMLButtonElement).addEventListener("click", () => {
     const rule = ruleFromShape({
       label: shapeLabel.value,
       prefix: shapePrefix.value,
+      keywords: shapeKeywords.value.split(","),
       body: readBody(shapeBody.value),
       minLength: Number(shapeMin.value),
     });

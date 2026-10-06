@@ -58,18 +58,55 @@ const detector = initializeSecretDetector({
 
 ## What a token can be
 
-Known shapes only, in `src/rules.ts`:
+52 known shapes, in `src/rules.ts`. The bundle is about 3.8 kB gzipped with no dependencies.
 
-- Anthropic API key
-- OpenAI API key
-- AWS access key
-- GitHub personal access token
-- Stripe live secret key
-- Slack token
-- JSON Web Token
-- Database connection string with a password
+- **AI providers:** Anthropic, OpenAI, OpenRouter, Groq, xAI, Perplexity, Hugging Face, Replicate, Google API key and OAuth secret
+- **Cloud and hosting:** AWS, DigitalOcean, Fly.io, Heroku, Supabase, Databricks, Doppler, Grafana, age
+- **Source and packages:** GitHub (classic and fine-grained), GitLab, npm, PyPI, Postman, Linear, Atlassian, Shopify
+- **Messaging and payments:** Slack (bot, app, webhook), Stripe live, SendGrid, Twilio, Square, Telegram bot, Discord bot, JSON Web Token
+- **Private keys:** PEM blocks (`PRIVATE KEY`, `RSA`, `EC`, `DSA`, `OPENSSH`, `ENCRYPTED`, `PGP`)
+- **Passwords in a URL:** database connection strings and `https://user:password@host`
+- **Generic keys that need a keyword:** Mailgun, Heroku, HubSpot, Cloudflare, Discord, Netlify, Sentry, Bitbucket, Codecov, Okta, LaunchDarkly
 
-A password or a custom key with no known prefix is not a secret token. Guessing from entropy flags ordinary words, so that is not the approach. A secret stuck to another word is a different token and is not reported.
+Shapes were checked against the default rules of [gitleaks](https://github.com/gitleaks/gitleaks) (MIT).
+
+### Private keys
+
+A private key spans many tokens, so it has a rule with `scope: "text"`, which is searched in the whole input instead of one token. It needs the `-----BEGIN ... PRIVATE KEY-----` header and at least 20 base64 characters after it. The footer is optional, because a paste cut off halfway is still a leaked key. These are flagged:
+
+- a normal multi-line block, one with its line breaks turned into spaces, and one inside JSON where they are a literal `\n`, as in a cloud service account file
+- the whole block is one match, so the result points at all of it and the tokens inside are not reported again
+
+These are not: a public key, a certificate, and a sentence that only names the header, like "what does -----BEGIN RSA PRIVATE KEY----- mean?".
+
+### Keyword rules
+
+A key like `key-` plus 32 hex characters is too generic to flag on its own. A rule with `keywords` only matches when one of them appears, in any case, within 8 tokens of the key:
+
+```
+this is my key for mailgun key-0123...   flagged
+this is my key for mailgun XYZ           not flagged, XYZ has no key shape
+this is my key 0123...                   not flagged, no keyword near it
+```
+
+The rule checks the shape of the key, not the words around it. Warning on "mailgun" plus the word "key" alone would flag every question about Mailgun.
+
+A key pasted as `NAME=value`, JSON (`"apiKey":"..."`) or a URL query (`?token=...`) is one token. The part after `=`, `:`, a quote or a comma is checked too, and the result points at the value only.
+
+Not detected:
+
+- A password, or a custom key with no known prefix. Guessing from entropy flags ordinary words, so that is not the approach.
+- A secret stuck to another word. That is a different token and is not reported.
+
+To cover a provider that is missing, click its key on the config page. A key with a stable start gets a prefix. A key without one gets a keyword, such as the provider name. Or pass your own `rules`:
+
+```ts
+initializeSecretDetector({
+  rules: [{ rule: "acme", label: "Acme key", keywords: ["acme"], source: "[a-f0-9]{32}" }],
+});
+```
+
+`source` is a regular expression for one whole token, with no `^`, `$` or `\b`.
 
 ## Config page
 
@@ -79,12 +116,27 @@ npm run demo
 
 Vite prints a local URL. Type a sentence, check the tokens, turn strict mode and the result shape on or off, and add a shape from a token that the checklist missed. Build copies a config object for `initializeSecretDetector`.
 
+## Speed
+
+Default detector, all 52 rules, `npm run benchmark` on an Apple M4 with Node 24:
+
+| Input | Time per check |
+| --- | --- |
+| Sentence, 12 words | 0.02 ms |
+| Chat message, 100 words | 0.12 ms |
+| Paste, 1,000 words | 1.1 ms |
+| Document, 10,000 words | 11 ms |
+| Document, 100,000 words | 120 ms |
+
+Time grows in a straight line with the input: about 1.1 ms per 1,000 words, whether or not a secret is in it. A private key adds about 0.1 ms. Worst-case shapes (one 100 kB token, 20,000 delimiters in one token, 5,000 private key headers with no body) take 0.6 to 26 ms, and doubling them doubles the time. Run `onLiveChange` on every keystroke for chat-sized input; for very large pastes, use `onChange`.
+
 ## Scripts
 
 ```bash
 npm test
 npm run typecheck
 npm run build   # emits dist/
+npm run benchmark   # speed of the full suite, one rule at a time, worst cases
 npm run demo
 ```
 

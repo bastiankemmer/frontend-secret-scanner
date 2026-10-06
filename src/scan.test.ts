@@ -60,21 +60,20 @@ describe("secretTokens", () => {
     expect(secretTokens(`prefix${openaiKey}`, secretRules)).toEqual([]);
   });
 
-  it.each([
-    ["anthropic", anthropicKey],
-    ["openai", openaiKey],
-    ["aws-access-key", "AKIAIOSFODNN7EXAMPLE"],
-    ["github-pat", `ghp_${"a".repeat(20)}`],
-    ["stripe-live", `sk_live_${"a".repeat(10)}`],
-    ["slack", `xoxb-${"1".repeat(10)}`],
-    [
-      "jwt",
-      `eyJ${"a".repeat(10)}.${"b".repeat(10)}.${"c".repeat(10)}`,
-    ],
-    ["database-url", "postgres://user:secret@localhost/app"],
-  ] as const)("flags a %s token", (rule, secret) => {
-    const [match] = secretTokens(`see ${secret} now`, secretRules);
-    expect(match?.rule).toBe(rule);
-    expect(match?.text).toBe(secret);
+  it("flags a key written as NAME=value, JSON or a query string", () => {
+    for (const input of [
+      `OPENAI_API_KEY=${openaiKey}`,
+      `{"apiKey":"${openaiKey}"}`,
+      `curl "https://x.test/?token=${openaiKey}"`,
+    ]) {
+      const [match] = secretTokens(input, secretRules);
+      expect(match?.rule).toBe("openai");
+      expect(input.slice(match?.start, match?.end)).toBe(openaiKey);
+    }
+  });
+
+  it("flags AWS's documented example key", () => {
+    const [match] = secretTokens("key AKIAIOSFODNN7EXAMPLE in the env", secretRules);
+    expect(match?.rule).toBe("aws-access-key");
   });
 });

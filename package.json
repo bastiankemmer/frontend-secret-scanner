@@ -1,6 +1,6 @@
 {
   "name": "frontend-secret-scanner",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "license": "MIT",
   "description": "Browser-side scanner that finds secrets in text before that text is sent to a server or a model.",
@@ -31,6 +31,7 @@
     "provenance": true
   },
   "scripts": {
+    "benchmark": "vitest bench --run",
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "demo": "vite demo",
     "prepublishOnly": "npm test && npm run typecheck && npm run build",
