@@ -146,14 +146,15 @@ MIT. See `LICENSE`.
 
 ## Publishing
 
-Publishing is automatic. Creating a GitHub release runs `.github/workflows/publish.yml`, which tests, builds, and runs `npm publish` with provenance. `ci.yml` runs the same checks on every push to `main` and on pull requests.
+Publishing is automatic. Creating a GitHub release runs `.github/workflows/publish.yml`, which tests, builds, and runs `npm publish` with provenance. It uses npm trusted publishing, so there is no npm token. `ci.yml` runs the same checks on every push to `main` and on pull requests.
 
-One-time setup:
+One-time setup (a trusted publisher can only be added to a package that already exists):
 
-1. On npmjs.com, create an automation access token that can publish.
-2. In the GitHub repo, add it under Settings, Secrets and variables, Actions, as `NPM_TOKEN`.
+1. Publish the first version by hand: `npm login`, then `npm publish`.
+2. On npmjs.com, open the package, Settings, Trusted publishing, choose GitHub Actions: user `bastiankemmer`, repository `frontend-secret-scanner`, workflow `publish.yml`.
+3. Optional: under Publishing access, choose "Require two-factor authentication and disallow tokens".
 
 Per release:
 
 1. Set `version` in `package.json` and merge it.
-2. Create a GitHub release with the tag `v<version>`, for example `v0.1.0`. The workflow fails if the tag and `package.json` differ.
+2. Create a GitHub release with the tag `v<version>`, for example `v0.2.0`. The workflow fails if the tag and `package.json` differ.

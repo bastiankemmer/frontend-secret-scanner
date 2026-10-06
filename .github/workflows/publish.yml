@@ -1,14 +1,18 @@
 name: Publish to npm
 
 # Publishes when a GitHub release is published. The tag must match package.json,
-# for example tag v0.1.0 for version 0.1.0.
+# for example tag v0.2.0 for version 0.2.0.
+#
+# No npm token: npm trusted publishing (OIDC). Set it up once on npmjs.com under
+# the package's Settings > Trusted publishing: GitHub Actions, user
+# bastiankemmer, repo frontend-secret-scanner, workflow publish.yml.
 on:
   release:
     types: [published]
 
 permissions:
   contents: read
-  id-token: write # npm provenance
+  id-token: write # npm trusted publishing and provenance
 
 jobs:
   publish:
@@ -16,10 +20,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Trusted publishing needs npm 11.5.1 or newer, which Node 24 ships.
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
+          node-version: 24
           registry-url: https://registry.npmjs.org
 
       - name: Tag matches package version
@@ -29,5 +33,3 @@ jobs:
 
       # prepublishOnly runs tests, typecheck, and build again before upload.
       - run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
