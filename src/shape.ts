@@ -6,7 +6,7 @@
  * instead: the rule then only counts next to that word.
  */
 
-import type { SecretRule } from "./rules.ts";
+import { secretRules, type SecretRule } from "./rules.ts";
 
 export type SecretBody = "letters-digits" | "digits" | "hex";
 
@@ -24,6 +24,8 @@ const bodySource: Record<SecretBody, string> = {
   hex: "[0-9A-Fa-f]",
 };
 
+const minToken = 8;
+
 export const suggestShape = (
   example: string,
 ): Pick<SecretShape, "prefix" | "body" | "minLength"> => {
@@ -34,7 +36,7 @@ export const suggestShape = (
   }
 
   const lastDelim = Math.max(token.lastIndexOf("-"), token.lastIndexOf("_"));
-  if (lastDelim > 0 && lastDelim < token.length - 1) {
+  if (lastDelim > 0 && lastDelim < token.length - 1 && stableHead(token, lastDelim)) {
     const rest = token.slice(lastDelim + 1);
     return {
       prefix: token.slice(0, lastDelim + 1),
@@ -43,22 +45,10 @@ export const suggestShape = (
     };
   }
 
-  // Four leading letters are a prefix, unless the whole token is hex: then
-  // they are just the first hex digits of a key with no prefix.
-  const leading = /^[A-Za-z]{4}/.exec(token);
-  if (leading && token.length > leading[0].length && !/^[0-9A-Fa-f]+$/.test(token)) {
-    const rest = token.slice(leading[0].length);
-    return {
-      prefix: leading[0],
-      body: bodyKind(rest),
-      minLength: rest.length,
-    };
-  }
-
   return { prefix: "", body: bodyKind(token), minLength: token.length };
 };
 
-export const ruleFromShape = (shape: SecretShape): SecretRule => {
+export const ruleFromShape = (shape: SecretShape, example?: string): SecretRule => {
   const label = shape.label.trim();
   if (label.length === 0) throw new Error("Name the secret.");
   const keywords = (shape.keywords ?? [])
@@ -69,20 +59,35 @@ export const ruleFromShape = (shape: SecretShape): SecretRule => {
       "Add a prefix or a keyword. A shape with neither would flag every word of that length.",
     );
   }
-  if (!Number.isInteger(shape.minLength) || shape.minLength < 1) {
-    throw new Error("Minimum length must be at least 1.");
+  if (
+    !Number.isInteger(shape.minLength) ||
+    shape.minLength < 1 ||
+    shape.prefix.length + shape.minLength < minToken
+  ) {
+    throw new Error(`Prefix length plus minimum length must be at least ${minToken}.`);
   }
   const body = bodySource[shape.body];
   if (body === undefined) throw new Error("Unknown body shape.");
 
-  const rule = slug(label);
-  if (rule.length === 0) throw new Error("Name the secret.");
-  const base = {
-    rule,
-    label,
-    source: String.raw`${escapeRegex(shape.prefix)}${body}{${shape.minLength},}`,
-  };
+  const source = String.raw`${escapeRegex(shape.prefix)}${body}{${shape.minLength},}`;
+  if (example !== undefined && !new RegExp(`^(?:${source})$`).test(example)) {
+    throw new Error(
+      "This shape does not match the example. The body class cannot express characters such as + / = .",
+    );
+  }
+
+  const rule = ruleId(label);
+  const base = { rule, label, source };
   return keywords.length === 0 ? base : { ...base, keywords };
+};
+
+// A random head (a digit, or both cases) is one specific key. Keep the split
+// only when the head is a plain prefix, or the single break sits early.
+const stableHead = (token: string, lastDelim: number) => {
+  const head = token.slice(0, lastDelim);
+  const plain = !/\d/.test(head) && !(/[A-Z]/.test(head) && /[a-z]/.test(head));
+  const early = token.split(/[-_]/).length === 2 && lastDelim < minToken;
+  return plain || early;
 };
 
 const bodyKind = (rest: string): SecretBody => {
@@ -93,9 +98,28 @@ const bodyKind = (rest: string): SecretBody => {
 
 const slug = (label: string) =>
   label
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
+
+const hashLabel = (label: string) => {
+  let hash = 2166136261;
+  for (let i = 0; i < label.length; i++) {
+    hash ^= label.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+};
+
+const ruleId = (label: string) => {
+  const slugged = slug(label);
+  const id = slugged || hashLabel(label);
+  if (!secretRules.some((item) => item.rule === id)) return id;
+  const alt = slugged ? `${slugged}-2` : `${id}-2`;
+  return secretRules.some((item) => item.rule === alt) ? hashLabel(label) : alt;
+};
 
 const escapeRegex = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

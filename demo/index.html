@@ -81,6 +81,9 @@
       #verdict {
         color: #9f1239;
       }
+      #verdict[data-pass="true"] {
+        color: #166534;
+      }
       pre {
         white-space: pre-wrap;
         word-break: break-word;
@@ -99,7 +102,7 @@
       <p>
         Type a sentence. The check splits it into tokens and asks each token
         if it is a secret. This page only builds that check. Your app calls
-        <code>onLiveChange</code> or <code>onChange</code> and draws the warning.
+        <code>detector.attach(field)</code> and draws the warning.
       </p>
 
       <fieldset>
@@ -121,6 +124,10 @@
             <option value="detail">Details</option>
             <option value="boolean">Boolean only</option>
           </select>
+        </label>
+        <label>
+          Message (<code>{labels}</code> is the kind of key found)
+          <input id="message" type="text" autocomplete="off" />
         </label>
       </fieldset>
 

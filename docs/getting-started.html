@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Getting started - frontend-secret-scanner</title>
+    <style>
+      body {
+        margin: 0;
+        font: 16px/1.55 system-ui, sans-serif;
+        background: #f6f5f2;
+        color: #1c1917;
+      }
+      main {
+        max-width: 46rem;
+        margin: 0 auto;
+        padding: 2.5rem 1.25rem 4rem;
+      }
+      h1 {
+        font-size: 1.9rem;
+        margin: 0 0 0.25rem;
+      }
+      h2 {
+        font-size: 1.3rem;
+        margin: 2.75rem 0 0.5rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid #d6d3d1;
+      }
+      h3 {
+        font-size: 1.05rem;
+        margin: 1.5rem 0 0.25rem;
+      }
+      a {
+        color: #9f1239;
+      }
+      code {
+        font: 0.9em ui-monospace, SFMono-Regular, Menlo, monospace;
+        background: #ebe9e4;
+        padding: 0.1em 0.3em;
+        border-radius: 0.25rem;
+      }
+      pre {
+        margin: 0.75rem 0 1rem;
+        padding: 0.9rem 1rem;
+        overflow-x: auto;
+        background: #1c1917;
+        color: #fafaf9;
+        border-radius: 0.5rem;
+        font: 0.85rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      pre code {
+        background: none;
+        padding: 0;
+        color: inherit;
+        font: inherit;
+      }
+      figure {
+        margin: 1rem 0 1.25rem;
+      }
+      figure img {
+        display: block;
+        width: 100%;
+        max-width: 664px;
+        height: auto;
+        border: 1px solid #d6d3d1;
+        border-radius: 0.5rem;
+      }
+      figcaption {
+        margin-top: 0.4rem;
+        font-size: 0.9rem;
+        color: #57534e;
+      }
+      .lead {
+        font-size: 1.1rem;
+        color: #44403c;
+      }
+      .note {
+        padding: 0.6rem 0.9rem;
+        background: #fff;
+        border-left: 4px solid #9f1239;
+        border-radius: 0.25rem;
+      }
+      nav {
+        margin: 1.25rem 0 0;
+        padding: 0.75rem 1rem;
+        background: #fff;
+        border: 1px solid #d6d3d1;
+        border-radius: 0.5rem;
+      }
+      nav ol {
+        margin: 0;
+        padding-left: 1.25rem;
+        columns: 2;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 0.75rem 0 1rem;
+        background: #fff;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 0.4rem 0.6rem;
+        border: 1px solid #d6d3d1;
+        vertical-align: top;
+      }
+      th {
+        background: #ebe9e4;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>frontend-secret-scanner</h1>
+      <p class="lead">
+        Check the text a person is typing for secrets, in the browser, before it
+        is sent to your backend or to a model provider.
+      </p>
+
+      <figure>
+        <img src="images/demo.gif" alt="Typing an OpenAI key into the demo page: the token turns red and sending is refused. Deleting the key lets the send through." />
+        <figcaption>
+          The demo page. The key turns red as it is typed and Send is refused.
+          Remove the key and the send goes through.
+        </figcaption>
+      </figure>
+
+      <nav aria-label="Contents">
+        <ol>
+          <li><a href="#install">Install</a></li>
+          <li><a href="#first-check">Your first check</a></li>
+          <li><a href="#result">Reading the result</a></li>
+          <li><a href="#wire">Wire it to an input</a></li>
+          <li><a href="#strict">Strict mode</a></li>
+          <li><a href="#boolean">Boolean report</a></li>
+          <li><a href="#detects">What it detects</a></li>
+          <li><a href="#keywords">Keys with no prefix</a></li>
+          <li><a href="#config-page">The config page</a></li>
+          <li><a href="#teach">Teach it a new key</a></li>
+          <li><a href="#custom">Custom rules</a></li>
+          <li><a href="#limits">Limits</a></li>
+          <li><a href="#speed">Speed</a></li>
+        </ol>
+      </nav>
+
+      <h2 id="install">1. Install</h2>
+      <pre><code>npm install frontend-secret-scanner</code></pre>
+      <p>
+        It is plain JavaScript with type declarations, has no dependencies and
+        uses no Node APIs, so it runs in the browser. The bundle is 4,574 bytes
+        minified and gzipped. The published package is ESM only, with no
+        <code>require</code> export.
+      </p>
+      <p class="note">
+        The library only checks strings. It draws no UI, never changes your
+        page, and sends nothing anywhere. Your app decides what to show and
+        whether to send.
+      </p>
+
+      <h2 id="first-check">2. Your first check</h2>
+      <p>
+        Initialize a detector once. With no config you get the default
+        checklist, strict mode, and detailed results.
+      </p>
+      <pre><code>import { initializeSecretDetector } from "frontend-secret-scanner";
+
+const detector = initializeSecretDetector();
+
+const result = detector.check("Hey, can you debug my deploy?");
+result.pass;      // true
+result.allowSend; // true</code></pre>
+
+      <figure>
+        <img src="images/02-pass.png" alt="A sentence with no secret: every token is plain and the page says Pass. Send allowed." />
+        <figcaption>No secret in the sentence. The check passes.</figcaption>
+      </figure>
+
+      <p>
+        The sentence is split on whitespace into tokens, and each token is
+        tested against the rules. A token that matches a rule is a secret.
+      </p>
+
+      <h2 id="result">3. Reading the result</h2>
+      <p>
+        <code>check(text)</code> returns a result. It never throws on a secret.
+        <code>attach</code> (below) gives you the same result in its callback.
+      </p>
+      <table>
+        <tr>
+          <th>Field</th>
+          <th>Meaning</th>
+        </tr>
+        <tr>
+          <td><code>pass</code></td>
+          <td><code>true</code> when no token is a secret.</td>
+        </tr>
+        <tr>
+          <td><code>allowSend</code></td>
+          <td>
+            What your app should do. <code>false</code> in strict mode when a
+            secret was found, otherwise <code>true</code>.
+          </td>
+        </tr>
+        <tr>
+          <td><code>report</code></td>
+          <td><code>"detail"</code> or <code>"boolean"</code>, from your config.</td>
+        </tr>
+        <tr>
+          <td><code>error</code></td>
+          <td>
+            Only with <code>report: "detail"</code> and a secret. A
+            <code>message</code> and the <code>matches</code>.
+          </td>
+        </tr>
+      </table>
+      <p>A secret found with detailed results:</p>
+      <pre><code>{
+  pass: false,
+  allowSend: false,
+  report: "detail",
+  error: {
+    message: "Don't send secrets. This looks like: OpenAI API key.",
+    matches: [
+      { text: "sk-proj-...", start: 47, end: 95, rule: "openai", label: "OpenAI API key" }
+    ]
+  }
+}</code></pre>
+      <p>
+        <code>start</code> and <code>end</code> are positions in the text you
+        passed in, so you can highlight the secret. The message names the kind
+        of key and does not repeat it. The <code>matches</code> do carry the
+        token text, so do not log them.
+      </p>
+      <p>
+        Write the message your own way with the <code>message</code> option.
+        <code>{labels}</code> is replaced by the kinds of key found, and a
+        message without it is used as it is:
+      </p>
+      <pre><code>const detector = initializeSecretDetector({
+  message: "Remove the {labels} before you send this.",
+});
+// "Remove the OpenAI API key before you send this."</code></pre>
+      <p>
+        The default is <code>Don't send secrets. This looks like: {labels}.</code>
+        The message is plain text, so it works in the config the config page
+        builds. With a boolean report there is no error, so no message.
+      </p>
+
+      <h2 id="wire">4. Wire it to an input</h2>
+      <p>
+        Pass your input, textarea, or contenteditable element to
+        <code>attach</code>. It listens, checks the text, and gives you the
+        result.
+      </p>
+      <pre><code>const detector = initializeSecretDetector({ when: "onLiveChange" });
+
+const stop = detector.attach(textarea, (result) => {
+  warning.hidden = result.pass;
+  if (!result.pass) {
+    warning.textContent =
+      result.report === "detail" ? result.error.message : "Don't send secrets.";
+  }
+  sendButton.disabled = !result.allowSend;
+});
+
+// stop() removes the listeners.</code></pre>
+      <ul>
+        <li>
+          <strong>When it checks.</strong> <code>when: "onLiveChange"</code>
+          listens to <code>input</code>, including paste and autofill.
+          <code>when: "onChange"</code> listens to <code>change</code>. A
+          contenteditable element does not fire <code>change</code>, so that
+          mode listens to <code>focusout</code>. A send control that keeps
+          focus (<code>mousedown</code> and <code>preventDefault</code>) never
+          blurs the field, so use <code>onLiveChange</code> there. Enter is
+          checked in both modes.
+        </li>
+        <li>
+          <strong>Enter in strict mode.</strong> If the text holds a secret, the
+          Enter key event is stopped before handlers on the field see it. Your
+          send-on-Enter handler does not run and a form does not submit. The
+          guard is a capture listener on <code>window</code>, and it only acts
+          when <code>composedPath()</code> includes the field. Listeners on the
+          field run after it. A capture listener already on
+          <code>window</code> before <code>attach</code> still runs first.
+          Enter is blocked while <code>isComposing</code> or
+          <code>keyCode</code> 229 only when the text fails the check; a clean
+          field still commits. Shift+Enter is not blocked.
+        </li>
+        <li>
+          <strong>The Send button.</strong> A click on your own button is not
+          stopped, because the library never sees it. Disable the button from
+          the callback, as above.
+        </li>
+        <li>
+          <strong>Other elements.</strong> <code>attach</code> throws for
+          anything that is not a text input, a textarea, or a contenteditable
+          element.
+        </li>
+      </ul>
+      <p>
+        You can also skip <code>attach</code> and wire it yourself:
+        <code>detector.check(text)</code> checks a string. The warning, the
+        colors, and the disabled button are always yours.
+      </p>
+
+      <h2 id="strict">5. Strict mode</h2>
+      <p>
+        Strict is on by default. When a token is a secret, <code>allowSend</code>
+        is <code>false</code>. Your app should refuse to send.
+      </p>
+      <figure>
+        <img src="images/03-secret-refused.png" alt="An OpenAI key in the sentence is marked as OpenAI API key. The message says Don't send secrets and Send refused." />
+        <figcaption>Strict on: the key is marked and the send is refused.</figcaption>
+      </figure>
+      <p>
+        Turn strict off with <code>strict: false</code> to warn only. The secret
+        is still reported, but <code>allowSend</code> stays <code>true</code>.
+      </p>
+      <pre><code>initializeSecretDetector({ strict: false });</code></pre>
+      <figure>
+        <img src="images/04-strict-off.png" alt="The same key is marked, and the message ends with Send allowed." />
+        <figcaption>Strict off: the same key is reported, and the send is allowed.</figcaption>
+      </figure>
+
+      <h2 id="boolean">6. Boolean report</h2>
+      <p>
+        If you do not want the found token in the result at all, ask for a
+        boolean report. You get <code>{ pass, allowSend, report }</code>, and
+        no <code>error</code>.
+      </p>
+      <pre><code>const detector = initializeSecretDetector({ report: "boolean" });
+
+detector.check(text);
+// { pass: false, allowSend: false, report: "boolean" }</code></pre>
+      <figure>
+        <img src="images/05-boolean.png" alt="With a boolean report the page says only Secret detected. Send refused, and the key token is not marked." />
+        <figcaption>Boolean report: it says a secret was found, not which one.</figcaption>
+      </figure>
+
+      <h2 id="detects">7. What it detects</h2>
+      <p>The default rules:</p>
+      <ul>
+        <li>
+          <strong>AI providers:</strong> Anthropic, OpenAI, OpenRouter, Groq,
+          xAI, Perplexity, Hugging Face, Replicate, Google API key and OAuth
+          secret
+        </li>
+        <li>
+          <strong>Cloud and hosting:</strong> AWS, DigitalOcean, Fly.io, Heroku,
+          Supabase, Databricks, Doppler, Grafana, age
+        </li>
+        <li>
+          <strong>Source and packages:</strong> GitHub (classic and
+          fine-grained), GitLab, npm, PyPI, Postman, Linear, Atlassian, Shopify
+        </li>
+        <li>
+          <strong>Messaging and payments:</strong> Slack, Stripe live, Stripe
+          webhook, SendGrid, Twilio, Square, Telegram bot, Discord bot, JSON
+          Web Token
+        </li>
+        <li>
+          <strong>Private keys:</strong> PEM blocks (<code>PRIVATE KEY</code>,
+          <code>RSA</code>, <code>EC</code>, <code>DSA</code>,
+          <code>OPENSSH</code>, <code>ENCRYPTED</code>, <code>PGP</code>), also
+          pasted on one line or inside JSON. Header lines such as
+          <code>Proc-Type</code> and <code>Version</code> are allowed, and a
+          line may start with <code>&gt;</code>, <code>#</code>,
+          <code>|</code> or <code>*</code>. A long ordinary word after the
+          header is not a key.
+        </li>
+        <li>
+          <strong>Passwords in a URL:</strong> database connection strings and
+          <code>https://user:password@host</code>
+        </li>
+        <li>
+          <strong>Keys that need a keyword:</strong> Mailgun, Heroku, HubSpot,
+          Cloudflare, Discord, Netlify, Sentry, Bitbucket, Codecov, Okta,
+          LaunchDarkly, Telegram, AWS secret access key
+        </li>
+      </ul>
+      <p>
+        A key pasted as <code>NAME=value</code>, JSON
+        (<code>"apiKey":"..."</code>) or a URL query (<code>?token=...</code>)
+        is found too, and the result points at the value. The same split works
+        after <code>=</code>, <code>:</code>, quotes, a comma or
+        <code>&amp;</code>. Smart quotes, markdown <code>*</code>, and pipes
+        are trimmed from the edges, as is a leading <code>/</code>,
+        <code>#</code> or <code>@</code>. Zero-width format characters inside
+        a key are flagged.
+      </p>
+
+      <h2 id="keywords">8. Keys with no prefix</h2>
+      <p>
+        Some keys look like any 32 hex characters. To avoid flagging every hash,
+        these rules also need a keyword, such as the provider name, within 8
+        tokens of the key.
+      </p>
+      <figure>
+        <img src="images/06-keyword-flagged.png" alt="The sentence 'this is my key for mailgun' followed by a Mailgun key shape: the key token is marked as Mailgun key." />
+        <figcaption>"mailgun" is next to a key-shaped token, so it is flagged.</figcaption>
+      </figure>
+      <figure>
+        <img src="images/07-keyword-not-flagged.png" alt="The sentence 'this is my key for mailgun XYZ': no token is marked and the check passes." />
+        <figcaption>
+          The word alone is not enough. The check looks at the shape of the key,
+          so questions about Mailgun are not flagged.
+        </figcaption>
+      </figure>
+
+      <h2 id="config-page">9. The config page</h2>
+      <p>
+        The repo has a page where you type sentences and configure the detector.
+        Clone the repo and run:
+      </p>
+      <pre><code>git clone https://github.com/bastiankemmer/frontend-secret-scanner.git
+cd frontend-secret-scanner
+npm install
+npm run demo</code></pre>
+      <p>Vite prints a local URL. The page has four parts:</p>
+      <ul>
+        <li><strong>Config:</strong> when, strict, and the result shape.</li>
+        <li><strong>Checklist:</strong> turn any default rule off, or remove one you added.</li>
+        <li><strong>Sentence:</strong> type text, press Check, and see each token. Send tries the send and is refused when strict says so.</li>
+        <li><strong>Build:</strong> the config object for <code>initializeSecretDetector</code>, with Copy and Download.</li>
+      </ul>
+      <figure>
+        <img src="images/01-config-page.png" alt="The config page: the When, Strict and Result settings above the checklist of known keys." />
+        <figcaption>The top of the config page.</figcaption>
+      </figure>
+
+      <h2 id="teach">10. Teach it a new key</h2>
+      <p>
+        A provider you use is missing? Show the page a real token and it builds
+        the rule. Use a made-up key or one that has been revoked, not a live one.
+      </p>
+      <h3>Step 1. Type a sentence with the key</h3>
+      <p>No token is marked, so the key is unknown.</p>
+      <figure>
+        <img src="images/08-unknown-key.png" alt="A sentence with a token starting with zk_live_: nothing is marked." />
+        <figcaption>The default checklist does not know this key.</figcaption>
+      </figure>
+      <h3>Step 2. Click the token</h3>
+      <p>
+        The page guesses the shape: the prefix, the kind of characters, and the
+        length. Correct the guess if it is off, then give the key a name.
+      </p>
+      <ul>
+        <li>A key with a stable start needs a <strong>prefix</strong>.</li>
+        <li>A key without one needs a <strong>keyword</strong> that appears near it, such as the provider name.</li>
+      </ul>
+      <figure>
+        <img src="images/09-shape-form.png" alt="The Shape from a token form filled in: name Zeta key, prefix zk_live_, letters and digits, minimum length 24." />
+        <figcaption>The form after clicking the token.</figcaption>
+      </figure>
+      <h3>Step 3. Add shape</h3>
+      <p>The key is detected right away, and the new rule sits at the top of the checklist.</p>
+      <figure>
+        <img src="images/10-shape-detected.png" alt="The same sentence again: the zk_live_ token is now marked Zeta key and the send is refused." />
+        <figcaption>The same sentence, now flagged.</figcaption>
+      </figure>
+      <figure>
+        <img src="images/11-checklist-new-rule.png" alt="The checklist with the new Zeta key rule at the top and a Remove button next to it." />
+        <figcaption>The new rule at the top of the checklist, with a Remove button.</figcaption>
+      </figure>
+      <h3>Step 4. Copy the config</h3>
+      <p>
+        In the Build section, press Copy config and pass the object to
+        <code>initializeSecretDetector</code> in your app.
+      </p>
+      <pre><code>import { initializeSecretDetector } from "frontend-secret-scanner";
+
+const detector = initializeSecretDetector(/* paste the config here */);</code></pre>
+      <p>
+        The config page learns a shape from the selected token. Click a token
+        and the form fills in the prefix, body, and minimum length.
+      </p>
+
+      <h2 id="custom">11. Custom rules</h2>
+      <p>
+        <code>rules</code> replaces the checklist. Leave it out for the default
+        shapes. To add to the defaults, spread them in:
+      </p>
+      <pre><code>import { initializeSecretDetector, secretRules } from "frontend-secret-scanner";
+
+const detector = initializeSecretDetector({
+  rules: [
+    ...secretRules,
+    { rule: "acme", label: "Acme key", keywords: ["acme"], source: "[a-f0-9]{32}" },
+  ],
+});</code></pre>
+      <table>
+        <tr>
+          <th>Field</th>
+          <th>Meaning</th>
+        </tr>
+        <tr>
+          <td><code>rule</code></td>
+          <td>A short id. The first rule that matches a token wins, so put specific shapes above broad ones.</td>
+        </tr>
+        <tr>
+          <td><code>label</code></td>
+          <td>What the message calls it.</td>
+        </tr>
+        <tr>
+          <td><code>source</code></td>
+          <td>A regular expression for one whole token. Write it without <code>^</code>, <code>$</code> or <code>\b</code>.</td>
+        </tr>
+        <tr>
+          <td><code>keywords</code></td>
+          <td>Optional. The rule only matches with one of these words, in any case, within 8 tokens.</td>
+        </tr>
+        <tr>
+          <td><code>scope</code></td>
+          <td>Optional. <code>"text"</code> searches the whole input, for secrets that span several tokens, like private keys.</td>
+        </tr>
+      </table>
+      <p>
+        A bad config throws when you initialize, for example an unknown
+        <code>when</code> or a pattern that is not a valid regular expression,
+        so you find out at startup.
+      </p>
+
+      <h2 id="limits">12. Limits</h2>
+      <ul>
+        <li>
+          It finds known shapes. A password or a custom key with no known
+          prefix is not found, because guessing from randomness flags ordinary
+          words too. Teach the shape instead (step 10).
+        </li>
+        <li>A secret glued to a word with no delimiter is not reported.</li>
+        <li>A key split by a newline is not reported.</li>
+        <li>
+          <code>https://user:pa/ss@host</code> is not reported: a slash inside
+          an https password. A database URL may still contain <code>/</code>.
+        </li>
+        <li>
+          It runs on the client, so it helps people and honest apps. It does not
+          replace a server-side check on what you store or forward.
+        </li>
+      </ul>
+
+      <h2 id="speed">13. Speed</h2>
+      <p>
+        With the default rules on an Apple M4: a 12-word sentence takes about
+        0.02 ms, a 100-word message 0.12 ms, and 1,000 words about 1.1 ms.
+        Ordinary text grows roughly with its length, so checking on every
+        keystroke is fine for chat-sized input. Run it yourself with
+        <code>npm run benchmark</code>.
+      </p>
+
+      <p>
+        More in the
+        <a href="https://github.com/bastiankemmer/frontend-secret-scanner#readme">README</a>
+        and on
+        <a href="https://www.npmjs.com/package/frontend-secret-scanner">npm</a>.
+      </p>
+    </main>
+  </body>
+</html>

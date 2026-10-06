@@ -5,16 +5,44 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: ["20", "22"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
       - run: npm test
       - run: npm run typecheck
       - run: npm run build
+      - name: Pack smoke
+        if: matrix.node == '22'
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d)
+          trap 'rm -rf "$work"' EXIT
+          npm pack --pack-destination "$work" >/dev/null
+          mkdir "$work/app"
+          tar -xzf "$work"/*.tgz -C "$work/app"
+          mkdir "$work/app/node_modules"
+          mv "$work/app/package" "$work/app/node_modules/frontend-secret-scanner"
+          pkg="$work/app/node_modules/frontend-secret-scanner"
+          if grep -R -n --include='*.d.ts' -E '\.ts["'\'']' "$pkg"; then
+            echo "declaration files import a .ts path" >&2
+            exit 1
+          fi
+          cd "$work/app"
+          node --input-type=module --eval 'const { initializeSecretDetector } = await import("frontend-secret-scanner"); const result = initializeSecretDetector().check("The weather is fine today."); if (result.pass !== true) { console.error(result); process.exit(1); }'

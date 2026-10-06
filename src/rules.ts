@@ -33,16 +33,23 @@ export type SecretRule = {
 };
 
 // A PEM block spans many tokens. Its lines may be separated by real newlines
-// or by a literal \n, as in a JSON service account file.
-const sep = String.raw`(?:\s|\\[nr])`;
+// or by a literal \n, as in a JSON service account file. A body line or the
+// END line may be prefixed by a quote or comment mark (>, |, #, *).
 const b64 = "[A-Za-z0-9+/=]";
-const privateKeyBlock = String.raw`-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----${sep}*${b64}{20,}(?:${sep}+${b64}{16,})*(?:(?:${sep}+${b64}+)?${sep}*-----END (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----)?`;
+const brk = String.raw`(?:\s|\\[nr])+`;
+const gap = String.raw`${brk}[>|#*]?[ \t]*`;
+const header = String.raw`[A-Za-z][A-Za-z0-9-]*:[ \t]*[^\s\\]+(?:[ \t]+[^\s\\]+)*`;
+const end = String.raw`-----END (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----`;
+// First chunk needs a digit or +/=, or a wrapped line of 64 or 76, so a
+// sentence after the BEGIN line is not a key. Later lines are ordinary base64.
+const first = String.raw`(?:(?=${b64}{64}(?:[^A-Za-z0-9+/=]|$))${b64}{64}|(?=${b64}{76}(?:[^A-Za-z0-9+/=]|$))${b64}{76}|(?=${b64}*[0-9+/=])${b64}{20,})`;
+const privateKeyBlock = String.raw`-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----(?:${gap}${header})*${gap}${first}(?:${gap}${b64}{16,})*(?:(?:${gap}${b64}+)?${gap}${end})?`;
 
 export const secretRules: readonly SecretRule[] = [
   // AI providers. sk- is broad, so the specific ones come first.
   { rule: "anthropic", label: "Anthropic API key", source: String.raw`sk-ant-[A-Za-z0-9_-]{20,}` },
   { rule: "openrouter", label: "OpenRouter API key", source: String.raw`sk-or-v1-[a-f0-9]{64}` },
-  { rule: "openai", label: "OpenAI API key", source: String.raw`sk-(?:proj-)?[A-Za-z0-9_-]{20,}` },
+  { rule: "openai", label: "OpenAI API key", source: String.raw`sk-(?:proj-[A-Za-z0-9_-]{20,}|(?=[A-Za-z0-9_-]*[A-Z0-9])[A-Za-z0-9_-]{20,})` },
   { rule: "groq", label: "Groq API key", source: String.raw`gsk_[A-Za-z0-9]{52}` },
   { rule: "xai", label: "xAI API key", source: String.raw`xai-[A-Za-z0-9]{80}` },
   { rule: "perplexity", label: "Perplexity API key", source: String.raw`pplx-[A-Za-z0-9]{48}` },
@@ -52,7 +59,7 @@ export const secretRules: readonly SecretRule[] = [
   { rule: "google-oauth-secret", label: "Google OAuth client secret", source: String.raw`GOCSPX-[A-Za-z0-9_-]{28}` },
 
   // Cloud and hosting.
-  { rule: "aws-access-key", label: "AWS access key", source: String.raw`(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}` },
+  { rule: "aws-access-key", label: "AWS access key", source: String.raw`(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z2-7]{16}` },
   { rule: "digitalocean", label: "DigitalOcean token", source: String.raw`do[opr]_v1_[a-f0-9]{64}` },
   { rule: "fly-io", label: "Fly.io access token", source: String.raw`fo1_[A-Za-z0-9_-]{43}` },
   { rule: "heroku", label: "Heroku API key", source: String.raw`HRKU-AA[A-Za-z0-9_-]{58}` },
@@ -78,10 +85,11 @@ export const secretRules: readonly SecretRule[] = [
   { rule: "slack-app-token", label: "Slack app token", source: String.raw`xapp-\d-[A-Za-z0-9]{9,}-\d{10,}-[A-Za-z0-9]{64}` },
   { rule: "slack-webhook", label: "Slack webhook URL", source: String.raw`https:\/\/hooks\.slack\.com\/(?:services|workflows|triggers)\/[A-Za-z0-9+\/]{43,56}` },
   { rule: "stripe-live", label: "Stripe live secret key", source: String.raw`(?:sk|rk)_(?:live|prod)_[A-Za-z0-9]{10,99}` },
+  { rule: "stripe-webhook", label: "Stripe webhook secret", source: String.raw`whsec_[A-Za-z0-9]{32,}` },
   { rule: "sendgrid", label: "SendGrid API key", source: String.raw`SG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}` },
   { rule: "twilio", label: "Twilio API key", source: String.raw`SK[0-9a-f]{32}` },
   { rule: "square", label: "Square access token", source: String.raw`(?:EAAA[A-Za-z0-9_-]{60}|sq0(?:atp|csp)-[A-Za-z0-9_-]{22,43})` },
-  { rule: "telegram-bot", label: "Telegram bot token", source: String.raw`[0-9]{8,10}:[A-Za-z0-9_-]{35}` },
+  { rule: "telegram-bot", label: "Telegram bot token", keywords: ["telegram"], source: String.raw`[0-9]{8,10}:[A-Za-z0-9_-]{35}` },
   // jwt must stay above discord-bot: both are three dot-separated parts.
   { rule: "jwt", label: "JSON Web Token", source: String.raw`eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}` },
   { rule: "discord-bot", label: "Discord bot token", source: String.raw`[MNO][A-Za-z0-9_-]{23,25}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,38}` },
@@ -99,13 +107,65 @@ export const secretRules: readonly SecretRule[] = [
   { rule: "codecov-token", label: "Codecov access token", keywords: ["codecov"], source: String.raw`[A-Za-z0-9]{32}` },
   { rule: "okta-token", label: "Okta access token", keywords: ["okta"], source: String.raw`00[A-Za-z0-9=_-]{40}` },
   { rule: "launchdarkly-token", label: "LaunchDarkly access token", keywords: ["launchdarkly"], source: String.raw`[A-Za-z0-9=_-]{40}` },
+  { rule: "aws-secret-access-key", label: "AWS secret access key", keywords: ["aws"], source: String.raw`[A-Za-z0-9+/]{40}` },
 
-  // Needs the header and at least 20 base64 characters after it, so a question
-  // that only names "-----BEGIN RSA PRIVATE KEY-----" is not flagged. The
-  // footer is optional: a paste that was cut off is still a leaked key.
+  // Needs a base64 body after the BEGIN line, so a sentence that only names
+  // the header is not flagged. The footer is optional: a cut-off paste is
+  // still a leaked key.
   { rule: "private-key", label: "Private key", scope: "text", source: privateKeyBlock },
 
   // Credentials inside a URL.
-  { rule: "database-url", label: "Database connection string", source: String.raw`(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqps?):\/\/[^\s'"<>]+:[^\s'"<>]+@\S+` },
-  { rule: "url-with-password", label: "URL with a password", source: String.raw`https?:\/\/[^\s:\/@'"<>]+:[^\s\/@'"<>]+@\S+` },
+  { rule: "database-url", label: "Database connection string", source: String.raw`(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqps?):\/\/[^\s'"<>:@]*:[^\s'"<>@]+@\S+` },
+  { rule: "url-with-password", label: "URL with a password", source: String.raw`https?:\/\/[^\s:\/@'"<>]+:[^\s\/@?'"<>#]+@\S+` },
 ];
+
+const isRule = (value: unknown): value is SecretRule => {
+  if (typeof value !== "object" || value === null) return false;
+  const rule = value as Record<string, unknown>;
+  return (
+    typeof rule.rule === "string" &&
+    rule.rule.length > 0 &&
+    typeof rule.label === "string" &&
+    rule.label.length > 0 &&
+    typeof rule.source === "string" &&
+    rule.source.length > 0 &&
+    (rule.scope === undefined || rule.scope === "token" || rule.scope === "text") &&
+    (rule.keywords === undefined ||
+      (Array.isArray(rule.keywords) &&
+        rule.keywords.every(
+          (keyword) => typeof keyword === "string" && keyword.trim().length > 0,
+        )))
+  );
+};
+
+export const readRules = (value: unknown): SecretRule[] => {
+  if (!Array.isArray(value)) throw new Error("rules must be a list.");
+  const seen = new Set<string>();
+  return value.map((item) => {
+    if (!isRule(item)) {
+      throw new Error("Each rule needs a rule id, a label, and a source.");
+    }
+    if (item.keywords?.length === 0) {
+      throw new Error(
+        `Rule ${item.rule} has empty keywords. Omit keywords for no restriction.`,
+      );
+    }
+    let matchesEmpty = false;
+    try {
+      RegExp(item.source, "g");
+      matchesEmpty = new RegExp(`^(?:${item.source})$`).test("");
+    } catch {
+      throw new Error(`Invalid pattern for ${item.rule}.`);
+    }
+    if (matchesEmpty) throw new Error(`Pattern for ${item.rule} matches an empty string.`);
+    if (seen.has(item.rule)) throw new Error(`Duplicate rule id: ${item.rule}.`);
+    seen.add(item.rule);
+    return {
+      rule: item.rule,
+      label: item.label,
+      source: item.source,
+      ...(item.keywords === undefined ? {} : { keywords: [...item.keywords] }),
+      ...(item.scope === undefined ? {} : { scope: item.scope }),
+    };
+  });
+};

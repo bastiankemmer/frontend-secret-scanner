@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { secretRules } from "./rules.ts";
-import { secretTokens } from "./scan.ts";
+import { findSecrets } from "./scan.ts";
 
 // Built at runtime so the repo holds no key-shaped literal.
 const x = (char: string, count: number) => char.repeat(count);
@@ -10,7 +10,7 @@ const uuid = () => `${x("a", 8)}-${x("a", 4)}-${x("a", 4)}-${x("a", 4)}-${x("a",
 const samples: Record<string, string> = {
   anthropic: `sk-ant-${x("a", 20)}`,
   openrouter: `sk-or-v1-${x("a", 64)}`,
-  openai: `sk-${x("a", 20)}`,
+  openai: `sk-${x("a", 19)}1`,
   groq: `gsk_${x("a", 52)}`,
   xai: `xai-${x("a", 80)}`,
   perplexity: `pplx-${x("a", 48)}`,
@@ -40,6 +40,7 @@ const samples: Record<string, string> = {
   "slack-app-token": `xapp-1-${x("A", 9)}-${x("1", 10)}-${x("a", 64)}`,
   "slack-webhook": `https://hooks.slack.com/services/${x("a", 43)}`,
   "stripe-live": `sk_live_${x("a", 10)}`,
+  "stripe-webhook": `whsec_${x("a", 32)}`,
   sendgrid: `SG.${x("a", 22)}.${x("a", 43)}`,
   twilio: `SK${x("a", 32)}`,
   square: `EAAA${x("a", 60)}`,
@@ -58,7 +59,8 @@ const samples: Record<string, string> = {
   "codecov-token": x("a", 32),
   "okta-token": `00${x("a", 40)}`,
   "launchdarkly-token": x("a", 40),
-  "private-key": `-----BEGIN PRIVATE KEY----- ${x("a", 20)}`,
+  "aws-secret-access-key": x("a", 40),
+  "private-key": `-----BEGIN PRIVATE KEY----- ${x("a", 19)}1`,
   "database-url": "postgres://u:p@h",
   "url-with-password": "https://u:p@h",
 };
@@ -87,7 +89,7 @@ describe("secretRules", () => {
   it.each(Object.entries(samples))(
     "%s: its own rule claims the sample, not an earlier one",
     (id, sample) => {
-      const [match] = secretTokens(around(id, sample), secretRules);
+      const [match] = findSecrets(around(id, sample), secretRules);
       expect(match?.rule).toBe(id);
       expect(match?.text).toBe(sample);
     },
@@ -97,7 +99,7 @@ describe("secretRules", () => {
     "%s: a key one character short is not detected as this rule",
     (id, sample) => {
       const short = around(id, sample.slice(0, -1));
-      const rules = secretTokens(short, secretRules).map((match) => match.rule);
+      const rules = findSecrets(short, secretRules).map((match) => match.rule);
       expect(rules).not.toContain(id);
     },
   );
@@ -105,7 +107,7 @@ describe("secretRules", () => {
   it.each(
     secretRules.filter((rule) => rule.keywords).map((rule) => rule.rule),
   )("%s: is not detected without its keyword", (id) => {
-    const rules = secretTokens(`my secret is ${samples[id]} ok`, secretRules);
+    const rules = findSecrets(`my secret is ${samples[id]} ok`, secretRules);
     expect(rules.map((match) => match.rule)).not.toContain(id);
   });
 
@@ -117,18 +119,69 @@ describe("secretRules", () => {
       "see https://example.com:8080/docs for the guide",
       "my password is hunter2 and the token is abc",
     ].join(". ");
-    expect(secretTokens(sentence, secretRules)).toEqual([]);
+    expect(findSecrets(sentence, secretRules)).toEqual([]);
   });
 
   it("lets a more specific sk- rule win over openai", () => {
-    expect(secretTokens(samples.anthropic ?? "", secretRules)[0]?.rule).toBe(
+    expect(findSecrets(samples.anthropic ?? "", secretRules)[0]?.rule).toBe(
       "anthropic",
     );
-    expect(secretTokens(samples.openrouter ?? "", secretRules)[0]?.rule).toBe(
+    expect(findSecrets(samples.openrouter ?? "", secretRules)[0]?.rule).toBe(
       "openrouter",
     );
-    expect(secretTokens(`sk-proj-${x("a", 40)}`, secretRules)[0]?.rule).toBe(
+    expect(findSecrets(`sk-proj-${x("a", 40)}`, secretRules)[0]?.rule).toBe(
       "openai",
     );
+  });
+
+  it("finishes a repeated database url in under a second", () => {
+    const input = "postgres://a:a,".repeat(1000);
+    const started = performance.now();
+    findSecrets(input, secretRules);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
+  it("flags a redis url with an empty user and a slash in a database password", () => {
+    expect(findSecrets("redis://:hunter2pass@host:6379", secretRules)[0]?.rule).toBe(
+      "database-url",
+    );
+    expect(findSecrets("postgres://u:pa/ss@host", secretRules)[0]?.rule).toBe(
+      "database-url",
+    );
+    expect(findSecrets("postgres://u:p:w@host", secretRules)[0]?.rule).toBe(
+      "database-url",
+    );
+  });
+
+  it("does not treat a port and an @ in a query as a url password", () => {
+    expect(findSecrets("https://example.com:8080?e=a@b.com", secretRules)).toEqual([]);
+    expect(findSecrets("https://user:pass@host", secretRules)[0]?.rule).toBe(
+      "url-with-password",
+    );
+    expect(findSecrets("https://user:pa/ss@host", secretRules)).toEqual([]);
+  });
+
+  it("does not flag a lowercase openai-shaped kebab slug", () => {
+    const slug = "sk-" + "this-is-a-long-kebab-case-slug";
+    expect(findSecrets(slug, secretRules).map((match) => match.rule)).not.toContain(
+      "openai",
+    );
+  });
+
+  it("does not flag an aws access key body containing 0, 1, 8, or 9", () => {
+    for (const digit of ["0", "1", "8", "9"]) {
+      const token = `AKIA${x("A", 15)}${digit}`;
+      expect(findSecrets(token, secretRules).map((match) => match.rule)).not.toContain(
+        "aws-access-key",
+      );
+    }
+  });
+
+  it("flags a telegram bot token only next to the word telegram", () => {
+    const token = `${x("1", 8)}:${x("a", 35)}`;
+    expect(findSecrets(token, secretRules).map((match) => match.rule)).not.toContain(
+      "telegram-bot",
+    );
+    expect(findSecrets(`telegram ${token}`, secretRules)[0]?.rule).toBe("telegram-bot");
   });
 });

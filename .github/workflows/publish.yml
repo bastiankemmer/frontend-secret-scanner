@@ -1,17 +1,20 @@
-name: Publish to npm
+name: Publish to npm and GitHub
 
-# Publishes when a GitHub release is published. The tag must match package.json,
-# for example tag v0.2.0 for version 0.2.0.
+# Runs when a version tag is pushed, for example v0.3.0 for version 0.3.0:
+#   npm version minor && git push --follow-tags
+# Publishes to npm, then creates the GitHub release with the matching section
+# of CHANGELOG.md as its notes. Fails before publishing if that section is
+# missing or the tag does not match package.json.
 #
 # No npm token: npm trusted publishing (OIDC). Set it up once on npmjs.com under
 # the package's Settings > Trusted publishing: GitHub Actions, user
 # bastiankemmer, repo frontend-secret-scanner, workflow publish.yml.
 on:
-  release:
-    types: [published]
+  push:
+    tags: ["v*"]
 
 permissions:
-  contents: read
+  contents: write # create the release
   id-token: write # npm trusted publishing and provenance
 
 jobs:
@@ -27,9 +30,26 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Tag matches package version
-        run: test "v$(node -p "require('./package.json').version")" = "${{ github.event.release.tag_name }}"
+        run: test "v$(node -p "require('./package.json').version")" = "${{ github.ref_name }}"
+
+      - name: Release notes from CHANGELOG.md
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '/^## /{ p = ($2 == v); next } p' CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "CHANGELOG.md has no section '## $version - <date>' with entries." >&2
+            exit 1
+          fi
+          cat notes.md
 
       - run: npm ci
 
       # prepublishOnly runs tests, typecheck, and build again before upload.
       - run: npm publish
+
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md \
+            || gh release edit "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md

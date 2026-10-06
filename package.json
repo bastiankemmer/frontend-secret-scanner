@@ -12,12 +12,9 @@
   "bugs": {
     "url": "https://github.com/bastiankemmer/frontend-secret-scanner/issues"
   },
-  "engines": {
-    "node": "^20.19.0 || >=22.12.0"
-  },
   "keywords": ["secrets", "api-key", "scanner", "browser", "dlp"],
   "sideEffects": false,
-  "files": ["dist"],
+  "files": ["dist", "CHANGELOG.md"],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -31,7 +28,7 @@
   },
   "scripts": {
     "benchmark": "vitest bench --run",
-    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && node --input-type=module -e 'import{readFileSync,writeFileSync,readdirSync}from\"node:fs\";const q=String.fromCharCode(34),s=String.fromCharCode(39);for(const n of readdirSync(\"dist\")){if(!n.endsWith(\".d.ts\"))continue;const p=\"dist/\"+n;writeFileSync(p,readFileSync(p,\"utf8\").split(\"\\n\").map(line=>line.includes(\" from \")?line.replaceAll(\".ts\"+q,\".js\"+q).replaceAll(\".ts\"+s,\".js\"+s):line).join(\"\\n\"))}'",
     "demo": "vite demo",
     "prepublishOnly": "npm test && npm run typecheck && npm run build",
     "test": "vitest run",

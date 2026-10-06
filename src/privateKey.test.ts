@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { initializeSecretDetector } from "./detector.ts";
+import { initializeSecretDetector, type DetectorConfig } from "./detector.ts";
 import { secretRules } from "./rules.ts";
-import { secretTokens } from "./scan.ts";
+import { findSecrets } from "./scan.ts";
 
 // A real key, made for each run so the repo holds no private key.
 const wrap = (der: ArrayBuffer) =>
@@ -29,7 +29,8 @@ beforeAll(async () => {
   publicBody = wrap(await crypto.subtle.exportKey("spki", pair.publicKey));
 });
 
-const found = (input: string) => secretTokens(input, secretRules);
+const found = (input: string) => findSecrets(input, secretRules);
+const x = (char: string, count: number) => char.repeat(count);
 
 describe("private key block", () => {
   it("flags the whole block and nothing after it", () => {
@@ -90,14 +91,57 @@ describe("private key block", () => {
     ).toEqual([]);
   });
 
+  it("flags an encrypted RSA key with Proc-Type and DEK-Info before the body", () => {
+    const key = [
+      "-----BEGIN RSA PRIVATE KEY-----",
+      "Proc-Type: 4,ENCRYPTED",
+      `DEK-Info: AES-128-CBC,${x("0", 16)}`,
+      "",
+      body,
+      "-----END RSA PRIVATE KEY-----",
+    ].join("\n");
+    expect(found(key).map((match) => match.text)).toEqual([key]);
+  });
+
+  it("flags a PGP private key block with a Version or Comment line", () => {
+    const key = [
+      "-----BEGIN PGP PRIVATE KEY BLOCK-----",
+      "Version: 1",
+      "Comment: none",
+      "",
+      body,
+      "-----END PGP PRIVATE KEY BLOCK-----",
+    ].join("\n");
+    expect(found(key).map((match) => match.text)).toEqual([key]);
+  });
+
+  it.each([">", "#", "|", "*"])(
+    "flags a private key whose lines are prefixed with %s",
+    (mark) => {
+      const key = block("RSA PRIVATE KEY", body)
+        .split("\n")
+        .map((line) => `${mark} ${line}`)
+        .join("\n");
+      const [match] = found(key);
+      expect(match?.rule).toBe("private-key");
+      expect(match?.text.startsWith("-----BEGIN")).toBe(true);
+      expect(match?.text).toContain("-----END RSA PRIVATE KEY-----");
+    },
+  );
+
+  it("does not flag ordinary words after a private key header", () => {
+    expect(found("-----BEGIN RSA PRIVATE KEY----- Internationalization mean")).toEqual([]);
+    expect(found(`-----BEGIN PRIVATE KEY----- ${x("a", 20)}`)).toEqual([]);
+  });
+
   it("refuses the send and does not return the key in boolean mode", () => {
     const key = block("PRIVATE KEY", body);
     const strict = initializeSecretDetector();
-    expect(strict.onChange(`my key\n${key}`)).toMatchObject({
+    expect(strict.check(`my key\n${key}`)).toMatchObject({
       pass: false,
       allowSend: false,
     });
-    const quiet = initializeSecretDetector({ report: "boolean" }).onChange(key);
+    const quiet = initializeSecretDetector({ report: "boolean" }).check(key);
     expect(quiet).toEqual({ pass: false, allowSend: false, report: "boolean" });
     expect(JSON.stringify(quiet)).not.toContain(body.slice(0, 40));
   });
@@ -106,11 +150,12 @@ describe("private key block", () => {
     const detector = initializeSecretDetector();
     const again = initializeSecretDetector(JSON.parse(JSON.stringify(detector.config)));
     const key = block("PRIVATE KEY", body);
-    expect(again.onChange(key).pass).toBe(false);
+    expect(again.check(key).pass).toBe(false);
   });
 
   it("rejects an unknown scope", () => {
     const rule = { rule: "a", label: "A", source: "a+", scope: "line" };
-    expect(() => initializeSecretDetector({ rules: [rule] })).toThrow(/rule/);
+    const init = (input: unknown) => initializeSecretDetector(input as Partial<DetectorConfig>);
+    expect(() => init({ rules: [rule] })).toThrow(/rule/);
   });
 });

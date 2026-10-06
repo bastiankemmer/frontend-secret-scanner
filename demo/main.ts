@@ -4,20 +4,15 @@
  * The host app still draws its own warning. This page does not.
  */
 
-import {
-  initializeSecretDetector,
-  ruleFromShape,
-  secretRules,
-  suggestShape,
-  tokensOf,
-} from "../src/index.ts";
+import { initializeSecretDetector, secretRules } from "../src/index.ts";
 import type {
   CheckResult,
   DetectorReport,
   DetectorWhen,
-  SecretBody,
   SecretRule,
 } from "../src/index.ts";
+import { tokensOf } from "../src/scan.ts";
+import { ruleFromShape, suggestShape, type SecretBody } from "../src/shape.ts";
 
 const must = <T extends Element>(selector: string, ctor: new () => T): T => {
   const node = document.querySelector(selector);
@@ -28,6 +23,7 @@ const must = <T extends Element>(selector: string, ctor: new () => T): T => {
 const whenInput = must("select#when", HTMLSelectElement);
 const strictInput = must("input#strict", HTMLInputElement);
 const reportInput = must("select#report", HTMLSelectElement);
+const messageInput = must("input#message", HTMLInputElement);
 const rulesList = must("#rules", HTMLUListElement);
 const draft = must("#draft", HTMLTextAreaElement);
 const tokens = must("#tokens", HTMLDivElement);
@@ -45,6 +41,7 @@ const build = must("#build", HTMLPreElement);
 const builtins = new Set<SecretRule>(secretRules);
 const rules: SecretRule[] = [...secretRules];
 const enabled = new Set<SecretRule>(rules);
+let shapeExample = "";
 
 const readWhen = (value: string): DetectorWhen => {
   if (value === "onLiveChange" || value === "onChange") return value;
@@ -67,6 +64,8 @@ const readConfig = () => ({
   strict: strictInput.checked,
   when: readWhen(whenInput.value),
   report: readReport(reportInput.value),
+  // A blank box means the default message, not an error while the field is being retyped.
+  message: messageInput.value.trim() === "" ? undefined : messageInput.value,
   rules: rules.filter((rule) => enabled.has(rule)),
 });
 
@@ -74,10 +73,7 @@ const detector = () => initializeSecretDetector(readConfig());
 
 const checkDraft = () => {
   const text = draft.value;
-  const result =
-    readWhen(whenInput.value) === "onLiveChange"
-      ? detector().onLiveChange(text)
-      : detector().onChange(text);
+  const result = detector().check(text);
   showResult(result);
   return result;
 };
@@ -85,6 +81,7 @@ const checkDraft = () => {
 const showResult = (result: CheckResult) => {
   renderTokens(result);
   sent.hidden = true;
+  verdict.dataset.pass = String(result.pass);
   if (result.pass) {
     verdict.textContent = "Pass. Send allowed.";
     return;
@@ -106,7 +103,7 @@ const renderTokens = (result: CheckResult | null) => {
     button.type = "button";
     button.className = "token";
     button.textContent = token.text;
-    const match = matches.find((item) => item.start === token.start);
+    const match = matches.find((item) => item.start < token.end && item.end > token.start);
     if (match) {
       button.dataset.secret = "true";
       button.textContent = `${token.text} (${match.label})`;
@@ -117,6 +114,7 @@ const renderTokens = (result: CheckResult | null) => {
 };
 
 const useToken = (token: string) => {
+  shapeExample = token;
   shapeError.textContent = "";
   try {
     const shape = suggestShape(token);
@@ -159,14 +157,17 @@ const renderRules = () => {
 
 const renderBuild = () => {
   const config = readConfig();
-  const call =
-    config.when === "onLiveChange" ? "detector.onLiveChange(text)" : "detector.onChange(text)";
-  binding.textContent = `Call ${call} from the ${config.when === "onLiveChange" ? "input" : "change"} event.`;
+  binding.textContent = `Call detector.attach(field). It checks on ${config.when === "onLiveChange" ? "every edit" : "change"} and on Enter.`;
   build.textContent = JSON.stringify(config, null, 2);
 };
 
+// The sentence box uses the same attach call an app would. Re-attach when the config changes.
+let detach = () => {};
+
 const refresh = () => {
   renderBuild();
+  detach();
+  detach = detector().attach(draft, showResult);
   if (draft.value.length > 0) checkDraft();
   else renderTokens(null);
 };
@@ -193,14 +194,10 @@ rulesList.addEventListener("click", (event) => {
   refresh();
 });
 
+// With "onChange" the verdict waits for the change, so drop the old one while typing.
 draft.addEventListener("input", () => {
   sent.hidden = true;
-  if (readWhen(whenInput.value) === "onLiveChange") checkDraft();
-  else renderTokens(null);
-});
-
-draft.addEventListener("change", () => {
-  if (readWhen(whenInput.value) === "onChange") checkDraft();
+  if (readWhen(whenInput.value) === "onChange") renderTokens(null);
 });
 
 must("#check", HTMLButtonElement).addEventListener("click", () => {
@@ -228,13 +225,16 @@ must("#send", HTMLButtonElement).addEventListener("click", () => {
 must("#add-shape", HTMLButtonElement).addEventListener("click", () => {
   shapeError.textContent = "";
   try {
-    const rule = ruleFromShape({
-      label: shapeLabel.value,
-      prefix: shapePrefix.value,
-      keywords: shapeKeywords.value.split(","),
-      body: readBody(shapeBody.value),
-      minLength: Number(shapeMin.value),
-    });
+    const rule = ruleFromShape(
+      {
+        label: shapeLabel.value,
+        prefix: shapePrefix.value,
+        keywords: shapeKeywords.value.split(","),
+        body: readBody(shapeBody.value),
+        minLength: Number(shapeMin.value),
+      },
+      shapeExample.length > 0 ? shapeExample : undefined,
+    );
     rules.unshift(rule);
     enabled.add(rule);
     renderRules();
@@ -248,6 +248,7 @@ must("#add-shape", HTMLButtonElement).addEventListener("click", () => {
 for (const input of [whenInput, strictInput, reportInput]) {
   input.addEventListener("change", () => refresh());
 }
+messageInput.addEventListener("input", () => refresh());
 
 must("#copy", HTMLButtonElement).addEventListener("click", () => {
   void navigator.clipboard.writeText(build.textContent).catch(() => {
@@ -265,5 +266,6 @@ must("#download", HTMLButtonElement).addEventListener("click", () => {
   URL.revokeObjectURL(url);
 });
 
+messageInput.value = initializeSecretDetector().config.message;
 renderRules();
-renderBuild();
+refresh();
